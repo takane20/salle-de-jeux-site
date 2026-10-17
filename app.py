@@ -1,25 +1,51 @@
 import os
+
 import streamlit as st
-from utils import get_client, is_admin
 
-st.set_page_config(page_title="Salle de jeux", page_icon="🎮")
+from utils import appliquer_couleur, get_branding, get_client, is_admin
 
-# (fichier, titre, icône, clé de page activable, réservé aux admins)
-PAGES = [
-    ("views/accueil.py", "Accueil", "🏠", None, False),
-    ("views/depots.py", "Dépôts et budget", "💰", "depots", True),
-    ("views/materiel.py", "Matériel", "🧰", "materiel", True),
-    ("views/finances.py", "Ventes et dépenses", "📊", "finances", False),
-    ("views/rentabilite.py", "Rentabilité", "📈", "finances", True),
-    ("views/clients.py", "Clients", "👥", "clients", False),
-    ("views/salle.py", "Salle", "🎮", "salle", False),
-    ("views/reglages.py", "Réglages", "⚙️", None, True),
-    ("views/journal.py", "Journal", "📝", None, True),
-]
+brand = get_branding()
+st.set_page_config(page_title=brand["nom"], page_icon="🎮")
+
+import pages_argent  # noqa: E402
+import pages_equipe  # noqa: E402
+import pages_export  # noqa: E402
+import pages_salle  # noqa: E402
+
+# (page, titre, icône, clé activable depuis Réglages, réservé aux admins)
+SECTIONS = {
+    "": [
+        (pages_argent.accueil, "Accueil", "🏠", None, False),
+    ],
+    "Argent": [
+        ("views/depots.py", "Dépôts et budget", "💰", "depots", True),
+        ("views/materiel.py", "Matériel", "🧰", "materiel", True),
+        (pages_equipe.devis, "Comparateur de prix", "🛒", "materiel", True),
+        (pages_argent.finances, "Ventes et dépenses", "📊", "finances", False),
+        (pages_argent.caisse, "Caisse du jour", "🧾", "finances", False),
+        (pages_argent.rentabilite, "Rentabilité", "📈", "finances", True),
+    ],
+    "Salle": [
+        (pages_salle.clients, "Clients", "👥", "clients", False),
+        (pages_salle.salle, "Salle", "🎮", "salle", False),
+        (pages_equipe.taches, "Tâches", "✅", None, False),
+    ],
+    "Administration": [
+        (pages_equipe.documents, "Documents", "📁", None, True),
+        (pages_export.exports, "Exports et rapports", "📤", None, True),
+        (pages_equipe.apparence, "Apparence", "🎨", None, True),
+        ("views/reglages.py", "Réglages", "⚙️", None, True),
+        (pages_equipe.journal, "Journal", "📝", None, True),
+    ],
+}
 
 
 def login_form():
-    st.title("🎮 Salle de jeux")
+    if brand.get("logo_url"):
+        st.image(brand["logo_url"], width=120)
+    st.title(f"🎮 {brand['nom']}")
+    if brand.get("slogan"):
+        st.caption(brand["slogan"])
     with st.form("login"):
         email = st.text_input("Email")
         pwd = st.text_input("Mot de passe", type="password")
@@ -44,6 +70,8 @@ def login_form():
             st.error("Email ou mot de passe incorrect.")
 
 
+appliquer_couleur(brand["couleur"])
+
 if "profile" not in st.session_state:
     login_form()
     st.stop()
@@ -65,19 +93,33 @@ if is_admin():
     except Exception:
         pages_actives = {}
 
-pages = []
-for fichier, titre, icone, cle, admin_only in PAGES:
-    if not os.path.exists(fichier):
-        continue
-    if admin_only and not is_admin():
-        continue
-    if cle and pages_actives.get(cle, True) is False:
-        continue
-    pages.append(st.Page(fichier, title=titre, icon=icone))
+navigation = {}
+for section, pages in SECTIONS.items():
+    liste = []
+    for cible, titre, icone, cle, admin_only in pages:
+        if isinstance(cible, str) and not os.path.exists(cible):
+            continue
+        if admin_only and not is_admin():
+            continue
+        if cle and pages_actives.get(cle, True) is False:
+            continue
+        if callable(cible):
+            if titre == "Accueil":
+                liste.append(st.Page(cible, title=titre, icon=icone, default=True))
+            else:
+                liste.append(
+                    st.Page(cible, title=titre, icon=icone, url_path=cible.__name__)
+                )
+        else:
+            liste.append(st.Page(cible, title=titre, icon=icone))
+    if liste:
+        navigation[section] = liste
 
-nav = st.navigation(pages)
+nav = st.navigation(navigation)
 
 with st.sidebar:
+    if brand.get("logo_url"):
+        st.image(brand["logo_url"], width=80)
     st.caption(f"Connecté : {profile['nom']} ({profile['role']})")
     if st.button("Se déconnecter"):
         try:
