@@ -369,4 +369,7 @@ def salle():
         if admin and st.button("Enregistrer les tarifs"):
             enregistrer_editeur(
                 sb, "pricing", df, edit,
+                              types={"nom": "str", "type": "str", "prix": "float", "duree_minutes": "int", "actif": "bool"},
+                obligatoire="nom", defauts={"type": "heure", "prix": 0.0, "actif": True},
+            )
           
