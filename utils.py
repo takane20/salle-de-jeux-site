@@ -80,8 +80,8 @@ def appliquer_couleur(couleur):
         button[kind="primary"],
         button[data-testid="stBaseButton-primary"],
         button[data-testid="stBaseButton-primaryFormSubmit"] {{
-            background-color: {couleur}; border-color: {couleur}; color: white;
-        }}
+            background-color: {couleur}; border-color: {couleur}; color: #0E0A14;
+            }}
         </style>
         """,
         unsafe_allow_html=True,
