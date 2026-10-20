@@ -1,7 +1,9 @@
 import uuid
 from datetime import date
+
 import streamlit as st
-from utils import get_client, fcfa
+
+from utils import fcfa, get_client
 
 sb = get_client()
 me = st.session_state["profile"]
@@ -26,9 +28,13 @@ if ok:
         if recu is not None:
             ext = recu.name.split(".")[-1].lower()
             chemin = f"{me['id']}/{uuid.uuid4().hex}.{ext}"
-            sb.storage.from_("recus").upload(
-                chemin, recu.getvalue(), {"content-type": recu.type}
-            )
+            try:
+                sb.storage.from_("recus").upload(
+                    chemin, recu.getvalue(), {"content-type": recu.type or "image/jpeg"}
+                )
+            except Exception as e:
+                st.error(f"La capture n'a pas pu être envoyée : {e}")
+                chemin = None
         sb.table("deposits").insert(
             {
                 "montant": montant,
