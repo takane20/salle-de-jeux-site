@@ -1,13 +1,16 @@
 import pandas as pd
 import streamlit as st
-from utils import get_client, fcfa
+
+from utils import afficher_flash, enregistrer_editeur, fcfa, get_client
 
 sb = get_client()
 st.title("🧰 Matériel")
-st.caption("Pour les articles par poste, mets le nombre de postes dans Quantité.")
+afficher_flash()
+st.caption("Pour les articles par poste, mets le nombre de postes dans Quantité. "
+           "Décoche « À l'ouverture » pour ce qui peut attendre.")
 
-COLS = ["id", "article", "categorie", "quantite", "prix_estime_min",
-        "prix_estime_max", "prix_reel", "achete", "note"]
+COLS = ["id", "article", "categorie", "quantite", "prix_estime_min", "prix_estime_max",
+        "prix_reel", "achete", "ouverture", "note"]
 CATS = ["poste", "salle", "electricite", "gestion", "froid", "autre"]
 
 data = sb.table("equipment").select("*").order("id").execute().data
@@ -19,9 +22,17 @@ for c in ["quantite", "prix_estime_min", "prix_estime_max", "prix_reel"]:
     d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0)
 q = d["quantite"]
 achete = d["achete"].fillna(False).astype(bool)
+ouv = d["ouverture"].fillna(True).astype(bool)
+
+st.subheader("Pour ouvrir")
+a, b = st.columns(2)
+a.metric("Minimum", fcfa((d["prix_estime_min"] * q)[ouv].sum()))
+b.metric("Maximum", fcfa((d["prix_estime_max"] * q)[ouv].sum()))
+
+st.subheader("Tout le matériel")
 c1, c2 = st.columns(2)
-c1.metric("Estimation basse", fcfa((d["prix_estime_min"] * q).sum()))
-c2.metric("Estimation haute", fcfa((d["prix_estime_max"] * q).sum()))
+c1.metric("Minimum", fcfa((d["prix_estime_min"] * q).sum()))
+c2.metric("Maximum", fcfa((d["prix_estime_max"] * q).sum()))
 c3, c4 = st.columns(2)
 c3.metric("Prix réels trouvés", fcfa((d["prix_reel"] * q).sum()))
 c4.metric("Déjà acheté", fcfa((d.loc[achete, "prix_reel"] * q[achete]).sum()))
@@ -40,43 +51,17 @@ edit = st.data_editor(
         "prix_estime_max": st.column_config.NumberColumn("Estimé max", min_value=0, step=1000),
         "prix_reel": st.column_config.NumberColumn("Prix réel", min_value=0, step=1000),
         "achete": st.column_config.CheckboxColumn("Acheté"),
+        "ouverture": st.column_config.CheckboxColumn("À l'ouverture"),
         "note": "Note",
     },
 )
 
-
-def propre(v):
-    if v is None or (not isinstance(v, str) and pd.isna(v)):
-        return None
-    return v.item() if hasattr(v, "item") else v
-
-
-def norm(r):
-    c = {k: propre(r[k]) for k in COLS if k != "id"}
-    c["quantite"] = int(c["quantite"] if c["quantite"] is not None else 1)
-    c["achete"] = bool(c["achete"])
-    c["categorie"] = c["categorie"] or "autre"
-    for k in ("prix_estime_min", "prix_estime_max", "prix_reel"):
-        if c[k] is not None:
-            c[k] = float(c[k])
-    return c
-
-
 if st.button("Enregistrer les changements", type="primary"):
-    avant = {int(r["id"]): norm(r) for _, r in df.iterrows()}
-    vus = set()
-    for _, r in edit.iterrows():
-        champs = norm(r)
-        if not champs["article"]:
-            continue
-        if pd.isna(r["id"]):
-            sb.table("equipment").insert(champs).execute()
-        else:
-            rid = int(r["id"])
-            vus.add(rid)
-            if champs != avant.get(rid):
-                sb.table("equipment").update(champs).eq("id", rid).execute()
-    for rid in set(avant) - vus:
-        sb.table("equipment").delete().eq("id", rid).execute()
-    st.success("Liste enregistrée.")
-    st.rerun()
+    enregistrer_editeur(
+        sb, "equipment", df, edit,
+        types={"article": "str", "categorie": "str", "quantite": "int",
+               "prix_estime_min": "float", "prix_estime_max": "float", "prix_reel": "float",
+               "achete": "bool", "ouverture": "bool", "note": "str"},
+        obligatoire="article",
+        defauts={"categorie": "autre", "quantite": 1, "achete": False, "ouverture": True},
+    )
