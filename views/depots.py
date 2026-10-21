@@ -9,6 +9,18 @@ sb = get_client()
 me = st.session_state["profile"]
 
 st.title("💰 Dépôts et budget")
+# Résumé du budget
+cfg = sb.table("settings").select("budget_cible").eq("id", 1).single().execute().data
+cible = float(cfg["budget_cible"] or 0)
+totaux = sb.table("totaux_depots").select("*").execute().data
+confirme = sum(float(t["confirme"]) for t in totaux)
+attente = sum(float(t["en_attente"]) for t in totaux)
+r1, r2 = st.columns(2)
+r1.metric("Total confirmé", fcfa(confirme))
+r2.metric("En attente", fcfa(attente))
+if cible > 0:
+    st.progress(min(confirme / cible, 1.0),
+                text=f"{confirme / cible:.0%} du budget visé ({fcfa(cible)})")
 
 noms = {x["id"]: x["nom"] for x in sb.table("profiles").select("id,nom").execute().data}
 
